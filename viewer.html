@@ -1,0 +1,166 @@
+<html>
+<head>
+<link rel="stylesheet" href="/potree-next/resources/potree.css">
+<style>
+  body { padding: 0; margin: 0; overflow: hidden; }
+  #potree { width: 100%; height: 100%; position: fixed; }
+  #potree canvas { width: 100%; height: 100%; }
+  #error {
+    display: none;
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: #1a1a2e; color: #e74c3c; padding: 2rem 3rem; border-radius: 8px;
+    font-family: system-ui, sans-serif; font-size: 1.1rem; text-align: center;
+    max-width: 500px; z-index: 1000;
+  }
+  #loading {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: #8899aa; font-family: system-ui, sans-serif; font-size: 1rem; z-index: 999;
+  }
+</style>
+</head>
+<body>
+
+<div id="potree">
+  <span style="position: relative; width: 100%; height: 100%; display: flex">
+    <canvas id="canvas" width="800" height="600" style="width: 100%; height: 100%;"></canvas>
+  </span>
+</div>
+
+<div id="loading">Loading point cloud...</div>
+<div id="error"></div>
+<pre id="msg_resources"></pre>
+<pre id="msg_dbg"></pre>
+
+<script>
+  window.Potree = {
+    settings: {
+      pointSize: 3,
+      pointBudget: 2_000_000,
+      minNodeSize: 150,
+      attribute: "rgba",
+      dbgAttribute: "rgba",
+      debugU: 1,
+      showBoundingBox: false,
+      useCompute: false,
+      dilateEnabled: false,
+      edlEnabled: false,
+      updateEnabled: true,
+      gradient: null,
+      splatType: 0,
+      showDebugMessages: false,
+    },
+    state: {
+      fps: 0,
+      camPos: "",
+      camDir: "",
+      num3DTileNodes: 0,
+      num3DTileTriangles: 0,
+      numVisiblePoints: 0,
+      numPoints: 0,
+      numVoxels: 0,
+      numElements: 0,
+      numNodes: 0,
+      renderedObjects: [],
+      renderedElements: 0,
+    },
+    events: { dispatcher: { dispatch: function(){} } },
+    debug: {},
+    pickQueue: [],
+    pickPosition: { x: 0, y: 0, z: 0, copy: function(){}, distanceTo: function(){ return 0; } },
+    hoveredItem: null,
+  };
+</script>
+
+<script type="importmap">
+{
+  "imports": {
+    "potree":        "/potree-next/src/Potree.js",
+    "lazperf":       "/potree-next/libs/laz-perf/laz-perf.js",
+    "toolbar":       "/potree-next/src/modules/toolbar/toolbar.js",
+    "sidebar":       "/potree-next/src/modules/sidebar/sidebar.js",
+    "BinaryHeap":    "/potree-next/libs/BinaryHeap/BinaryHeap.js",
+    "tween":         "/potree-next/libs/tween/tween.esm.js",
+    "range-select":  "/potree-next/libs/range-select/RangeSelect.js",
+    "json5":         "/potree-next/libs/json5/json5.js",
+    "proj4":         "/potree-next/libs/proj4js/proj4-src.js",
+    "radix-sort-esm":"/potree-next/libs/webgpu-radix-sort/dist/esm/radix-sort-esm.js"
+  }
+}
+</script>
+
+<script type="module">
+  import {Potree} from "potree";
+  import {PotreeLoader} from "potree";
+  import {installToolbar} from "toolbar";
+  import {installSidebar} from "sidebar";
+
+  for (const [key, value] of Object.entries(Potree)) {
+    if (value !== undefined && value !== null) {
+      window.Potree[key] = value;
+    }
+  }
+
+  const loadingEl = document.getElementById("loading");
+  const errorEl = document.getElementById("error");
+
+  function showError(msg) {
+    loadingEl.style.display = "none";
+    errorEl.style.display = "block";
+    errorEl.textContent = msg;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const baseUrl = params.get("baseUrl");
+
+  if (!baseUrl) {
+    showError("Missing required query parameter: baseUrl");
+    throw new Error("Missing baseUrl");
+  }
+
+  try {
+    const canvas = document.getElementById("canvas");
+    const elPotree = document.getElementById("potree");
+    const potree = await Potree.init(canvas);
+    const {scene, controls} = potree;
+
+    installToolbar(potree.renderer.canvas, potree);
+
+    installSidebar(elPotree, potree).then(sidebar => {
+      window.sidebar = sidebar;
+      let panelAttributes = sidebar.sections.find(
+        section => section.handler.name === "Attributes"
+      )?.handler;
+      let pointcloud = scene.root.children.find(
+        c => c.constructor.name === "PointCloudOctree"
+      );
+      if (panelAttributes && pointcloud) {
+        panelAttributes.set(pointcloud);
+      }
+    });
+
+    Potree.settings.edlEnabled = true;
+    Potree.settings.dilateEnabled = false;
+    Potree.settings.hqsEnabled = true;
+    Potree.settings.pointBudget = 8_000_000;
+    Potree.settings.attribute = "rgba";
+    Potree.settings.splatType = 0;
+    Potree.settings.pointSize = 2;
+    Potree.settings.minNodeSize = 200;
+    Potree.settings.showBoundingBox = false;
+
+    const metadataUrl = baseUrl.replace(/\/$/, "") + "/metadata.json";
+    PotreeLoader.load(metadataUrl).then(pointcloud => {
+      scene.root.children.push(pointcloud);
+      pointcloud.name = "pointcloud";
+
+      controls.zoomTo(pointcloud);
+    });
+
+    loadingEl.style.display = "none";
+  } catch (e) {
+    showError("Failed to load point cloud: " + (e.message || e));
+  }
+</script>
+
+</body>
+</html>

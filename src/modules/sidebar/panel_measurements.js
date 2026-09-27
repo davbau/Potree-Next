@@ -99,8 +99,10 @@ class Panel{
 
 		let measureTool = potree.measure;
 
-		
-		
+		if(!measureTool || !measureTool.measures){
+			return;
+		}
+
 		let html = "";
 
 		let i = 0;

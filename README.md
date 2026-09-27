@@ -1,4 +1,7 @@
-# About
+# Fork About
+Some changes and crash fixes for use with react.
+
+## Original About
 
 Potree is an Open Source viewer for massive point cloud data sets, capable of displaying data sets with billions of points in web browsers. 
 

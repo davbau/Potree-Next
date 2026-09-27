@@ -24,6 +24,11 @@ class Panel{
 
 	update(){
 
+		if(!Potree.instance || !Potree.instance.scene){
+			requestAnimationFrame(this.update.bind(this));
+			return;
+		}
+
 		let scene = Potree.instance.scene;
 
 		let tableString = "";
